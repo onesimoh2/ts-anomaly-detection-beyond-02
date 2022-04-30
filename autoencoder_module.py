@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader, Subset
+from torch.nn import functional as F
 from utilities import DateUtils, variance
 from fft_functions import fourier_extrapolation, fourierPrediction
 import matplotlib.pyplot as plt
@@ -102,64 +103,84 @@ class autoencoder(nn.Module):
         self.batchSize = batchSize
         self.learningRate = learningRate
         self.weight_decay = weight_decay
-        self.layer_reduction_factor = layer_reduction_factor
         self.number_0f_features = number_of_features
+
         #defining the structure of the autoencoder, this is a general method that should fit different structure depending on the number of input nodes 
-        self.output_features_by_leyers = []
-        self.output_features_by_leyers.append(number_of_features)
-        self.number_of_last_layer = int(round(number_of_features / 6.0))
-        if self.number_of_last_layer <= 1 and number_of_features > 3:
-            self.number_of_last_layer = 2
-
-        for leyer_lev in range(5):
-            reduct = int(round(self.output_features_by_leyers[leyer_lev] / layer_reduction_factor))
-            if reduct < self.number_of_last_layer or reduct == self.output_features_by_leyers[-1] or reduct == 0:
-                break
-            last_leyer = self.output_features_by_leyers[-1]
-            self.output_features_by_leyers.append(reduct)
-            if(reduct == 1):
-                break
-
-
-
-        self.encoder = nn.Sequential()
-        #dynamically creating the structure of the autoencoder 
-        for iLayer in range(len(self.output_features_by_leyers)-1):
-            self.encoder.add_module('L' + str(iLayer), nn.Linear(self.output_features_by_leyers[iLayer], self.output_features_by_leyers[iLayer + 1]))
-            if iLayer + 1 < len(self.output_features_by_leyers) - 1:
-                self.encoder.add_module('R' + str(iLayer), nn.ReLU())
-        
-        self.decoder = nn.Sequential()
-        for iLayer in range(len(self.output_features_by_leyers))[::-1]:
-            self.decoder.add_module('L' + str(iLayer), nn.Linear(self.output_features_by_leyers[iLayer], self.output_features_by_leyers[iLayer - 1]))
-            if iLayer > 1:
-                self.decoder.add_module('R' + str(iLayer), nn.ReLU())
-            else:
-                break
-
+        self.first_encode_layer = nn.Linear(4, 3)
+        self.get_mean = nn.Linear(3, 2)
+        self.get_std = nn.Linear(3, 2)
+        self.first_decode_layer = nn.Linear(2, 3)
+        self.second_decode_layer = nn.Linear(3, 4)
         self.initialize_weights()
-
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learningRate, weight_decay=self.weight_decay)
-        
-        #self.optimizer = torch.optim.SGD(self.parameters(), lr=0.01, momentum=0.9)
-        
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learningRate, weight_decay=self.weight_decay)     
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=5, factor=0.1, mode='min', verbose=True)
-        self.loss = nn.MSELoss()
-        #self.loss = nn.L1Loss()
 
+        
+    def encoder(self, x):
+        x = F.relu(self.first_encode_layer(x))
+        return self.get_mean(x), self.get_std(x)
+
+    def decoder(self, z):
+        h3 = F.relu(self.first_decode_layer(z))
+        return self.second_decode_layer(h3)
+            
+    def reparameterize(self, mu, logvar):
+        if self.training:
+            std = torch.exp(0.5*logvar)
+            eps = torch.randn_like(std)
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+        
+         # Reconstruction + KL divergence losses summed over all elements and batch
+    def loss_function(self,recon_x, x, mu, logvar):
+        #BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+        BCE = rr = F.mse_loss(recon_x, x)
+        # see Appendix B from VAE paper:
+        # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+        # https://arxiv.org/abs/1312.6114
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+        return BCE + KLD   
+        
+        #self.loss = nn.MSELoss()
+
+    def loss_function_reduction_none(self,recon_x, x, mu, logvar):
+        #BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+        BCE = rr = F.mse_loss(recon_x, x)
+        test_loss_list = rr = F.mse_loss(recon_x, x, reduction='none')
+        numCols = test_loss_list.size(dim=1)
+        last_epoch_individual_loss = []
+        
+        sumAll = 0.0 #calculate individual loss
+        for xsqTen in test_loss_list:
+            sumAll = 0.0
+            for xsq in xsqTen:
+                sumAll = sumAll + xsq
+
+            indivAve = float(sumAll/numCols)
+            last_epoch_individual_loss.append(indivAve)
+        # see Appendix B from VAE paper:
+        # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+        # https://arxiv.org/abs/1312.6114
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+        return BCE + KLD, last_epoch_individual_loss   
     
     def forward(self, x):
-        encoder = self.encoder(x)
-        decoder = self.decoder(encoder)
-        return decoder
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decoder(z), mu, logvar
 
 
     def train_only(self, train_sample, max_training_loss_var_num):                               
         train_ave = []
         last_epoch_loss = []
-        last_epoch_individual_loss = []
+        last_epoch_individual_loss_all = []
         max_training_loss = 0
-        criterion_no_reduced = nn.MSELoss(reduction = 'none')
+        #criterion_no_reduced = nn.MSELoss(reduction = 'none')
 
         for epoch in range(self.epochs):
             self.train() 
@@ -167,51 +188,46 @@ class autoencoder(nn.Module):
             train_num = 0.0
             for data in train_sample:
                 #predict
-                output = self(data)
+                recon_batch, mu, logvar =  self.forward(data)
+                #output = self(data)
                 # find loss
-                loss = self.loss(output, data)
-                loss_train_data = loss.data.item()                
+                if epoch + 1 == self.epochs:
+                    loss, last_epoch_individual_loss = self.loss_function_reduction_none(recon_batch, data, mu, logvar)
+                    last_epoch_individual_loss_all.extend(last_epoch_individual_loss)
+                else:
+                    loss = self.loss_function(recon_batch, data, mu, logvar)
+                
+                lossTrainData = loss.data.item() 
+                train_epc = train_epc + lossTrainData
+                train_num =  train_num + 1
                 # perform back propagation
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                #accumulae the losses for each element
-                train_epc = train_epc + loss_train_data
-                train_num =  train_num + 1
-                
-                #print(f'epoch {epoch + 1}/{self.epochs}, loss: {loss.data:.4f}')
-                if epoch + 1 == self.epochs:
-                    last_epoch_loss.append(loss_train_data)
-                    #obtain the list of all individual losses in the batch
-                    test_loss_list = criterion_no_reduced(output, data)
-                    num_cols = test_loss_list.size(dim=1)
-                    sum_all = 0.0 #calculate individual loss
-                    for xsqTen in test_loss_list:
-                        sum_all = 0.0
-                        #add all losses for each input 
-                        for xsq in xsqTen:
-                            sum_all = sum_all + xsq
-                        #calculate the mean for each individual element of the batch
-                        indivAve = float(sum_all/num_cols)
-                        last_epoch_individual_loss.append(indivAve)
 
-                    # if max_training_loss < loss_train_data:
-                    #     max_training_loss = loss_train_data
-                        
+            loss_train_data = loss.data.item() 
             #average of the losses for a given epoch
             epoc_t_ave = train_epc/train_num
             #add all losses in an array
             train_ave.append(float(epoc_t_ave))
-            #min_loss = train_epc/train_num
+            
             print(f'******epoch {epoch + 1}, loss: {train_ave[epoch]:.4f}')
-
+            
             #supply the current loss for the scheduler
             min_loss_round = round(train_ave[epoch], 4)
             self.scheduler.step(min_loss_round)
+            #accumulae the losses for each element
+            train_epc = train_epc + loss_train_data
+            train_num =  train_num + 1
+             
+
+            #supply the current loss for the scheduler
+            # min_loss_round = round(train_ave[epoch], 4)
+            # self.scheduler.step(min_loss_round)
        
 
         #calculate the theashold to detect anomalies
-        mean, var, sig = variance(last_epoch_individual_loss)
+        mean, var, sig = variance(last_epoch_individual_loss_all)
         max_training_loss = mean +  (max_training_loss_var_num * sig)
         return max_training_loss, train_ave
 
@@ -253,3 +269,8 @@ class autoencoder(nn.Module):
         #print(f'     Validate_loss: {test_loss:.4f}')
         return detected_anomalies, pcent_anomalies_detected, test_loss
 
+#code came from
+#https://maurocamaraescudero.netlify.app/post/assessing-a-variational-autoencoder-on-mnist-using-pytorch/
+#https://github.com/dpkingma/examples/blob/master/vae/main.py
+
+#https://www.youtube.com/watch?v=uaaqyVS9-rM theory intro
