@@ -235,19 +235,18 @@ class autoencoder(nn.Module):
 
     def execute_evaluate(self, feature_sample, max_training_loss, index_df):
         self.eval()
-        #criterion = nn.L1Loss()
-        criterion = nn.MSELoss()
         indx = 0
         test_epc = 0.0
         test_num = 0.0
         detected_anomalies = []
-        criterion_no_reduced = nn.MSELoss(reduction = 'none')
-        #criterionNoReduced = nn.L1Loss(reduction = 'none')
+        
         with torch.no_grad(): # Run without Autograd
             for original in feature_sample:
-                output = self.forward(original)  # model can't use test to learn
-                test_loss = criterion(output, original).data.item()
+                recon_batch, mu, logvar = self.forward(original)  # model can't use test to learn
+                test_loss = self.loss_function(recon_batch, original, mu, logvar)
 
+                
+            
                 test_epc = test_epc + test_loss
                 test_num = test_num + 1
 

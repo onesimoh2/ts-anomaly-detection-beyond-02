@@ -1,8 +1,11 @@
-# Anomaly Detection for Univariate Time Series Using Fourier Transform and Autoencoders in Python and PyTorch
+# Anomaly Detection for Univariate Time Series Using Fourier Transform and Variational Autoencoders in Python and PyTorch
 
 ## ABSTRACT
 
-Autoencoders are widely proposed as a method for detecting anomalies. This project will explore the possibility of training an autoencoder with a univariate time series and then submitting new isolated values to the model to detect anomalies. The problem with training an autoencoder with a time series is that the autoencoder must learn more about its trend and seasonality to make accurate predictions. There are several applications using autoencoders and Recurrent Neural Networks (RNN) (1) but they require the input to be a sequence. In contrast, what is often required is to train the autoencoder once, and then feed it with new cases not necessarily in sequence, to determine whether they are anomalies or not. This can be important, for example, when monitoring large amounts of real-time transactions using parallel processing, as transactions are not guaranteed to be processed in the exact time they are produced. 
+Autoencoders are widely proposed as a method for detecting anomalies. This project will explore the possibility of training a variational autoencoder with a univariate time series and then submitting new isolated values to the model to detect anomalies. The problem with training an autoencoder with a time series is that the autoencoder must learn more about its trend and seasonality to make accurate predictions. There are several applications using autoencoders and Recurrent Neural Networks (RNN) (1) but they require the input to be a sequence. In contrast, what is often required is to train the autoencoder once, and then feed it with new cases not necessarily in sequence, to determine whether they are anomalies or not. This can be important, for example, when monitoring large amounts of real-time transactions using parallel processing, as transactions are not guaranteed to be processed in the exact time they are produced. 
+
+Using a variation autoencoder has the advantage that the latent space is represented by a distribution rather than as a vector. This is expected to lead to some desired fuzziness in detecting abnormalities, resulting in greater sensitivity in detecting points that deviate from expected behavior. 
+
 
 ## THE CHALANGE OF NOT USING AN RNN
 
