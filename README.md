@@ -6,6 +6,8 @@ Autoencoders are widely proposed as a method for detecting anomalies. This proje
 
 Using a variation autoencoder has the advantage that the latent space is represented by a distribution rather than as a vector. This is expected to lead to some desired fuzziness in detecting abnormalities, resulting in greater sensitivity in detecting points that deviate from expected behavior. 
 
+This project is very similar to the one described in repo ts-anomaly-detection-beyond-01, except for the utilization of variational autoencoders instead of a regular one,
+
 
 ## THE CHALANGE OF NOT USING AN RNN
 
@@ -27,7 +29,7 @@ The use of sines and cosines suggests concepts extracted from the Fourier Series
 
 We use the idea in (2) of adding new fields to each item in the series but, in this case a non-linear trend, seasonality and the absolute value between the non-linear trend and the real value of the series are the ones added. To obtain these values a modification of the algorithm developed in (5) is used to calculate the FFT and then use its coefficients to predict future values. To obtain the nonlinear trend only selected coefficients are considered, this generates a smooth version of the original time series. The value that represents seasonality is calculated first by subtracting the linear trend from the time series using the NumPy polyfit function and then using more complex coefficients to reproduce the original data. 
 These calculated data will be added as new columns: first column the original data, second column the nonlinear trend, third the seasonality, and fourth the difference between the nonlinear trend and the original data. The first three columns will be normalized. 
-This data is then given io an autoencoder with the decoder part containing four input nodes, the compressed layer containing two nodes and the decoder reconstructing the data back to four nodes. It is expected that the autoencoder will determine the pattern provided by these elements for those entries considered normal, so this can later be used to determine anomalies. 
+This data is then given io a variational autoencoder (derived from the code in (8) and (9)) with the decoder part containing four input nodes, has a layer of three nodes and the compressed layer containing two nodes. The decoder reconstructing the data back to four nodes. It is expected that the autoencoder will determine the pattern provided by these elements for those entries considered normal, so this can later be used to determine anomalies. 
 Once the model is calculated, together with the FFT coefficients, it is used later on to determine when new incoming data can be considered an anomaly. For that, during training, in the last epoch the mean and variance of the losses are calculated, then during evaluation losses found over 3 standard deviations from the mean are considered anomalies 
 
 ## THE EXAMPLE
@@ -48,25 +50,27 @@ The challenge of the algorithm is to try to catch the value of 10000 as the anom
 In (6) the author posed a challenge; finding a manual generated anomaly in a data set (named catfish.csv) containing a monthly time series, following there is a graph of all the data: 
 The data is divided into a training set, from 1986 to 1999, and a validation one containing only the year 2000 which will be used as the new data to be given to the model to detect the anomaly. The provided code contains a variant to also extract a testing set. The problem with not using a testing set is that we do not have a way to validate if the algorithm is performing well (decreasing the loss and not overfitting) but using a testing set will remove from training important data, specially from the last months of the time series that, in many cases are critical so, for this example no testing set was used. 
 
-This data is given to the autoencoder that will be trained for 500 iterations (epochs) with batch size 16, this batch size is calculated using a formula. The following is the graph showing the reduction of the loss in the training set:
+This data is given to the variational autoencoder autoencoder that will be trained for 500 iterations (epochs) with batch size 16, this batch size is calculated using a formula. The following is the graph showing the reduction of the loss in the training set:
 After using FFT to calculate complex parameters, nonlinear trends and data showing stationary patterns are calculated. The following is a graph of the calculated nonlinear trend and the data representing stationarity. 
 
 ![image](data/trainstat.png)
 
-The task of the autoencoder is trying to learn the trend and stationary pattern from this data.  
+The task of the variational autoencoder is trying to learn the trend and stationary pattern from this data.  
 The following is the graph showing the reduction in the loss in the training set: 
 
 ![image](data/trainloss.png)
 
-Finally, when the validation set is given to the autoencoder it provides the following results: 
+Finally, when the validation set is given to the variational autoencoder it provides the following results: 
 
 ![image](data/anomoly.png)
 
-As seen the algorithm correctly detected the anomaly inserted. The autoencoder, while not deep, seems to learn the characteristics of the time series and in spite that the 10000 (or similar one) was present in the data during training, it flags it as an anomaly. 
+As seen the algorithm correctly detected the anomaly inserted. The autoencoder, while not too deep, seems to learn the characteristics of the time series and in spite that the 10000 (or similar one) was present in the data during training, it flags it as an anomaly. The utilization of a variational autoencoder seams to provide more robust detection than the regular autoencoder. The threshold calculated to select the anomalies was 0.1523 and the loss calculated for the anomaly inserted was 0.2996, as we can see is more than twice the threshold. When changing the anomaly value from 10,000 to 15,000 it also detects it. In addition it detected a regular point in the time series with value 29161, the loss for this point was 0.1596, very close to the threshold but definitely can be considered abnormal.
 
 ## CONCLUSION
 
 The transformers (3) popularized the notion that positions of items in a series can be expressed by adding information, to the original data, from a continuous function that depends on the order of the item in the sequence. They used a clever combination of sines and cosines, Gregg (2) seams to apply this concept to time series prediction. Similar approaches were tried with unsatisfactory results until FFT was introduced in the way described above.
+
+A variational autoencoder seams to provide better understanding of the patterns present in the time series. Because the latent space is derived from a distribution the sensitivity of the model to detect the anomalies improves. 
 
 There are still some challenges to further investigate. Typically, you train the autoencoder using only good data, since in the practice anomalies can be present in the training set the widespread practice is to remove them but, if we do that, we create non existing points that could affect the FFT. The code try to solve this by extrapolating the missing data.
 
@@ -90,7 +94,7 @@ This is the starting point of the application; it simply calls the execution con
 This is the main program containing the parts to download the csv file, selecting the first part of the time series, create the data frames and the data loaders, defining the autoencoder, training the model and finally execute the model to find the anomalies. In the future we will add ‘catfich_all’ that is going to be a module to analyze the whole catfish time series and ‘catfish_last_part’ to do the same with the last part of the series.
 
 ### autoencoder_module.py 
-Contain the classes to create the data loaders and the autoencoder. This last contains functions to define the autoencoder, train the autoencoder and execute the trained model.
+Contain the classes to create the data loaders and the variational autoencoder. This last contains functions to define the autoencoder, train the autoencoder and execute the trained model. The code for this was defeloped using (8) and (9).
 
 ### fft_functions.py 
 Contains the functions to perform the FFT and later reconstruct the series from its complex coefficients. The first function basically calculates the coefficients and the second uses those coefficients to extrapolate the series. This code is a variation of the code described in (5).
@@ -123,6 +127,12 @@ No further explanation will be added here since it can be found inside the code.
 6- Time-Series-Analysis-1/Anomaly Detection. Anh Nguyen https://github.com/anhnguyendepocen/Time-Series-Analysis-1 
 
 7- torch.manual seed(3407) is all you need: On the influence of random seeds in deep learning architectures for computer vision. David Picard. 2021.
+
+8- Assessing a Variational Autoencoder on MNIST using Pytorch. Mauro Camara Escudero, 2020. https://maurocamaraescudero.netlify.app/post/assessing-a-variational-autoencoder-on-mnist-using-pytorch/
+
+9- Durk Kingma. https://github.com/dpkingma/examples/blob/master/vae/main.py
+
+
 
 
 
