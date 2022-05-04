@@ -4,7 +4,7 @@
 
 Autoencoders are widely proposed as a method for detecting anomalies. This project will explore the possibility of training a variational autoencoder with a univariate time series and then submitting new isolated values to the model to detect anomalies. The problem with training an autoencoder with a time series is that the autoencoder must learn more about its trend and seasonality to make accurate predictions. There are several applications using autoencoders and Recurrent Neural Networks (RNN) (1) but they require the input to be a sequence. In contrast, what is often required is to train the autoencoder once, and then feed it with new cases not necessarily in sequence, to determine whether they are anomalies or not. This can be important, for example, when monitoring large amounts of real-time transactions using parallel processing, as transactions are not guaranteed to be processed in the exact time they are produced. 
 
-Using a variation autoencoder has the advantage that the latent space is represented by a distribution rather than as a vector. This is expected to lead to some desired fuzziness in detecting abnormalities, resulting in greater sensitivity in detecting points that deviate from expected behavior. 
+Using a variation autoencoder has the advantage that the latent space is represented by a distribution rather than as a vector. This is expected to lead to some desired fuzziness in detecting abnormalities, resulting in greater sensitivity in detecting points that deviate from expected behavior. in (10) there is a good introduction to the theory behind variational autoencoders.
 
 This project is very similar to the one described in repo ts-anomaly-detection-beyond-01, except for the utilization of variational autoencoders instead of a regular one,
 
@@ -29,7 +29,7 @@ The use of sines and cosines suggests concepts extracted from the Fourier Series
 
 We use the idea in (2) of adding new fields to each item in the series but, in this case a non-linear trend, seasonality and the absolute value between the non-linear trend and the real value of the series are the ones added. To obtain these values a modification of the algorithm developed in (5) is used to calculate the FFT and then use its coefficients to predict future values. To obtain the nonlinear trend only selected coefficients are considered, this generates a smooth version of the original time series. The value that represents seasonality is calculated first by subtracting the linear trend from the time series using the NumPy polyfit function and then using more complex coefficients to reproduce the original data. 
 These calculated data will be added as new columns: first column the original data, second column the nonlinear trend, third the seasonality, and fourth the difference between the nonlinear trend and the original data. The first three columns will be normalized. 
-This data is then given io a variational autoencoder (derived from the code in (8) and (9)) with the decoder part containing four input nodes, has a layer of three nodes and the compressed layer containing two nodes. The decoder reconstructing the data back to four nodes. It is expected that the autoencoder will determine the pattern provided by these elements for those entries considered normal, so this can later be used to determine anomalies. 
+This data is then given io a variational autoencoder (derived from the code in (8) and (9)) with the decoder part containing four input nodes, has a hidden layer of three nodes and the compressed layer containing two nodes. The decoder reconstructing the data back to four nodes. It is expected that the autoencoder will determine the pattern provided by these elements for those entries considered normal, so this can later be used to determine anomalies. 
 Once the model is calculated, together with the FFT coefficients, it is used later on to determine when new incoming data can be considered an anomaly. For that, during training, in the last epoch the mean and variance of the losses are calculated, then during evaluation losses found over 3 standard deviations from the mean are considered anomalies 
 
 ## THE EXAMPLE
@@ -50,7 +50,8 @@ The challenge of the algorithm is to try to catch the value of 10000 as the anom
 In (6) the author posed a challenge; finding a manual generated anomaly in a data set (named catfish.csv) containing a monthly time series, following there is a graph of all the data: 
 The data is divided into a training set, from 1986 to 1999, and a validation one containing only the year 2000 which will be used as the new data to be given to the model to detect the anomaly. The provided code contains a variant to also extract a testing set. The problem with not using a testing set is that we do not have a way to validate if the algorithm is performing well (decreasing the loss and not overfitting) but using a testing set will remove from training important data, specially from the last months of the time series that, in many cases are critical so, for this example no testing set was used. 
 
-This data is given to the variational autoencoder autoencoder that will be trained for 500 iterations (epochs) with batch size 16, this batch size is calculated using a formula. The following is the graph showing the reduction of the loss in the training set:
+This data is given to the variational autoencoder autoencoder that will be trained for 500 iterations (epochs) with batch size 16, this batch size is calculated using a formula. 
+
 After using FFT to calculate complex parameters, nonlinear trends and data showing stationary patterns are calculated. The following is a graph of the calculated nonlinear trend and the data representing stationarity. 
 
 ![image](data/trainstat.png)
@@ -132,9 +133,7 @@ No further explanation will be added here since it can be found inside the code.
 
 9- Durk Kingma. https://github.com/dpkingma/examples/blob/master/vae/main.py
 
-
-
-
+10- Deep Learning, Variational Autoencoder. Ali Ghodsi, 2017. https://www.youtube.com/watch?v=uaaqyVS9-rM
 
 
 
