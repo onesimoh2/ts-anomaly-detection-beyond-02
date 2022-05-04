@@ -268,8 +268,3 @@ class autoencoder(nn.Module):
         #print(f'     Validate_loss: {test_loss:.4f}')
         return detected_anomalies, pcent_anomalies_detected, test_loss
 
-#code came from
-#https://maurocamaraescudero.netlify.app/post/assessing-a-variational-autoencoder-on-mnist-using-pytorch/
-#https://github.com/dpkingma/examples/blob/master/vae/main.py
-
-#https://www.youtube.com/watch?v=uaaqyVS9-rM theory intro
